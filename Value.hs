@@ -5,6 +5,8 @@ data Value = Bool Bool
     | String String
     | Var String
     | Nil
+	| Break
+	| UnderfinedVar
 
 --
 -- Pretty Printer
@@ -17,6 +19,7 @@ instance Show Value where
   show (String str) = "\"" ++ str ++ "\""
   show (Var name) = name
   show Nil = "undefined"
+  show Break = "break"
   
 -- This function could be replaced by (unwords.map show). The unwords
 -- function takes a list of String values and uses them to build a 
