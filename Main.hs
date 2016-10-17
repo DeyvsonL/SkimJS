@@ -25,6 +25,34 @@ evalExpr env (AssignExpr OpAssign (LVar var) expr) = do
 		UnderfinedVar -> createAutomaticGlobalVar var e 
 		_ -> setVar var e
 
+		
+		
+--function expression
+evalExpr env (FuncExpr mId args stmts) =
+	case mId of
+		Just (Id name) -> createAutomaticGlobalVar name (Function (Id name) args stmts)
+		Nothing -> return (Function (Id "___") args stmts)
+
+
+evalExpr env (CallExpr expr params) = do
+	f <- evalExpr env expr
+	case f of
+		Function _ args stmts -> do
+			createScope
+			storeParams env args params
+			evalResult <- evalStmt env (BlockStmt stmts)
+			removeScope
+			return evalResult
+		UnderfinedVar -> error $ "função inexistente"
+
+storeParams _ [] [] = return Nil		
+storeParams env ((Id argName):args) (param:params) = do
+	v <- evalExpr env param
+	createLocalVar argName v
+	storeParams env args params
+storeParms _ _ _ = error $ "quantidade de parametros incompativel" 
+-- end functions expressions
+		
 evalStmt :: StateT -> Statement -> StateTransformer Value
 evalStmt env EmptyStmt = return Nil
 evalStmt env (VarDeclStmt []) = return Nil
@@ -44,7 +72,9 @@ evalStmt env (BlockStmt (stmt:stmts)) = do
 evalStmt env (IfSingleStmt expr stmt) = do
 	Bool b <- evalExpr env expr
 	if b then do
+		createScope
 		a <- evalStmt env stmt
+		removeScope
 		return a
 	else return Nil
 
@@ -53,17 +83,23 @@ evalStmt env (IfSingleStmt expr stmt) = do
 evalStmt env (IfStmt expr stmt stmt2) = do
 	Bool b <- evalExpr env expr
 	if b then do
+		createScope
 		a <- evalStmt env stmt
+		removeScope
 		return a
 	else do
-		c <- evalStmt env stmt2			
+		createScope
+		c <- evalStmt env stmt2
+		removeScope
 		return c
 --end if/else
 --while
 evalStmt env (WhileStmt expr stmt) = do
 	Bool b <- evalExpr env expr
 	if b then do
+		createScope
 		a <- evalStmt env stmt
+		removeScope
 		case a of 
 			Break -> return Nil
 			_ -> evalStmt env (WhileStmt expr stmt)
@@ -71,7 +107,57 @@ evalStmt env (WhileStmt expr stmt) = do
 --end while
 --break
 evalStmt env (BreakStmt _) = return Break
---
+--function
+evalStmt env (FunctionStmt (Id name) args stmts) = createAutomaticGlobalVar name (Function (Id name) args stmts)
+-- end function
+--for
+evalStmt env (ForStmt init condition increment stmt) = do
+	createScope
+	evalForInit env init
+	Bool conditionResult <- evalForCondition env condition
+	if conditionResult then do
+		createScope
+		evalResult <- evalStmt env stmt
+		removeScope
+		case evalResult of
+			Break -> do
+				removeScope
+				return Nil
+			_ -> do
+				forAux env (ForStmt init condition increment stmt)
+				removeScope
+				return Nil
+	else return Nil
+	
+forAux env (ForStmt init condition increment stmt) = do
+	evalForIncrement env increment
+	Bool conditionResult <- evalForCondition env condition
+	if conditionResult then do
+		createScope
+		evalResult <- evalStmt env stmt
+		removeScope
+		case evalResult of
+			Break -> do
+				return Nil
+			_ -> do
+				forAux env (ForStmt init condition increment stmt)
+				return Nil
+	else return Nil
+	
+evalForInit env init = 
+	case init of
+		VarInit varDecl -> evalStmt env (VarDeclStmt varDecl)
+		ExprInit expr -> evalExpr env expr
+
+evalForCondition env condition =
+	case condition of
+		Just expr -> evalExpr env expr 
+		Nothing -> return (Bool True)
+
+evalForIncrement env increment = 
+	case increment of
+		Just val -> evalExpr env val
+--end for
 
 
 -- Do not touch this one :)
@@ -107,8 +193,8 @@ environment :: [Map String Value]
 environment = [Map.empty]
 
 --funções para criar e remover escopos
-createScope = \s -> (Nil, Map.empty:s)
-removeScope = \s -> (Nil, (tail s))
+createScope = ST $ \s -> (Nil, Map.empty:s)
+removeScope = ST $ \s -> (Nil, (tail s))
 
 stateLookup :: StateT -> String -> StateTransformer Value
 stateLookup env var = ST $ \s ->
@@ -133,20 +219,24 @@ varDecl env (VarDecl (Id id) maybeExpr) = do
             val <- evalExpr env expr
             createLocalVar id val
 			
-createAutomaticGlobalVar id val = ST $ \s -> (val, insertGlobalVar id val s)
+createAutomaticGlobalVar id val = ST $ \s -> (val, createAutomaticGlobalVarAux id val s)
 createLocalVar id val = ST $ \s -> (val, (insert id val (head s)):(tail s))
 			
-insertGlobalVar id val [] = []
-insertGlobalVar id val (x:[]) = (insert id val x):[] 
-insertGlobalVar id val (x:xs) = x:(insertGlobalVar id val xs)
+createAutomaticGlobalVarAux id val [] = []
+createAutomaticGlobalVarAux id val (x:[]) = (insert id val x):[] 
+createAutomaticGlobalVarAux id val (x:xs) = x:(createAutomaticGlobalVarAux id val xs)
 
 setVar :: String -> Value -> StateTransformer Value
-setVar var val = ST $ \s -> (val, insert var val s)
-
+setVar var val = ST $ \s -> (val, setVarAux var val s)
+--auxilia a setVar
+setVarAux _ _ [] = error ("Erro inesperado")
+setVarAux id val (x:xs) =
+	case Map.lookup id x of
+		Nothing -> x:(setVarAux id val xs)
+		Just _ -> (insert id val x):xs
 --
 -- Types and boilerplate
 --
-
 type StateT = [Map String Value]
 data StateTransformer t = ST (StateT -> (t, StateT))
 
@@ -169,11 +259,12 @@ instance Applicative StateTransformer where
 --
 -- showResult modificado para mostrar vários níveis da memoria
 showResult :: (Value, StateT) -> String
+showResult (val, []) = ""
 showResult (val, defs) =
     show val ++ "\n" ++ show (toList $ union (head defs) (head environment)) ++ "\n" ++ showResult (val, (tail defs))
 
 getResult :: StateTransformer Value -> (Value, StateT)
-getResult (ST f) = f Map.empty
+getResult (ST f) = f environment
 
 main :: IO ()
 main = do
