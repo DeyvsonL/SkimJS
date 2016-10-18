@@ -4,7 +4,6 @@ function fib(i){
 	} else {
 		return fib(i - 1) + fib(i - 2);
 	}
-
 }
 
 fib(20);
