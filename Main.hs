@@ -150,7 +150,9 @@ evalStmt env (ForStmt init condition increment stmt) = do
 				forAux env (ForStmt init condition increment stmt)
 				removeScope
 				return Nil
-	else return Nil
+	else do
+		removeScope
+		return Nil
 	
 forAux env (ForStmt init condition increment stmt) = do
 	evalForIncrement env increment
