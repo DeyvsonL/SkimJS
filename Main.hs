@@ -14,6 +14,7 @@ evalExpr :: StateT -> Expression -> StateTransformer Value
 evalExpr env (VarRef (Id id)) = stateLookup env id
 evalExpr env (IntLit int) = return $ Int int
 evalExpr env (BoolLit bool) = return $ Bool bool
+evalExpr env (StringLit str) = return $ String str
 evalExpr env (InfixExpr op expr1 expr2) = do
     v1 <- evalExpr env expr1
     v2 <- evalExpr env expr2
@@ -32,7 +33,6 @@ evalExpr env (FuncExpr mId args stmts) =
 	case mId of
 		Just (Id name) -> createAutomaticGlobalVar name (Function (Id name) args stmts)
 		Nothing -> return (Function (Id "___") args stmts)
-
 
 evalExpr env (CallExpr expr params) = do
 	f <- evalExpr env expr
@@ -171,6 +171,7 @@ evalForInit env init =
 	case init of
 		VarInit varDecl -> evalStmt env (VarDeclStmt varDecl)
 		ExprInit expr -> evalExpr env expr
+		_ -> return Nil
 
 evalForCondition env condition =
 	case condition of
@@ -207,6 +208,7 @@ infixOp env OpEq   (Bool v1) (Bool v2) = return $ Bool $ v1 == v2
 infixOp env OpNEq  (Bool v1) (Bool v2) = return $ Bool $ v1 /= v2
 infixOp env OpLAnd (Bool v1) (Bool v2) = return $ Bool $ v1 && v2
 infixOp env OpLOr  (Bool v1) (Bool v2) = return $ Bool $ v1 || v2
+infixOp env _  _ _ = return $ error $ "Operação invalida"
 
 --
 -- Environment and auxiliary functions
