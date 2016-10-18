@@ -13,6 +13,7 @@ data Value = Bool Bool
 	| Function Id [Id] [Statement]
 	| FunctReturn Value
 	| EmptyFunctReturn
+	| Array [Expression]
 --
 -- Pretty Printer
 --
@@ -29,6 +30,8 @@ instance Show Value where
   show (Function (Id name) _ _) = name ++ "()"
   show (FunctReturn _) = ""
   show EmptyFunctReturn = ""
+  show (Array []) = "[]"
+  show (Array (x:xs)) = "head: " ++ (show x) ++ " (tail: " ++ (show xs) ++ ")"
 -- This function could be replaced by (unwords.map show). The unwords
 -- function takes a list of String values and uses them to build a 
 -- single String where the words are separated by spaces.

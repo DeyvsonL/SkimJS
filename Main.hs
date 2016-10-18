@@ -26,7 +26,9 @@ evalExpr env (AssignExpr OpAssign (LVar var) expr) = do
 		UnderfinedVar -> createAutomaticGlobalVar var e 
 		_ -> setVar var e
 
-		
+evalExpr env (ArrayLit []) = return $ Array []
+evalExpr env (ArrayLit array) = return $ Array array
+
 		
 --function expression
 evalExpr env (FuncExpr mId args stmts) =
@@ -46,7 +48,7 @@ evalExpr env (CallExpr expr params) = do
 				EmptyFunctReturn -> return Nil
 				FunctReturn x -> return x
 				_ -> return Nil
-		UnderfinedVar -> error $ "função inexistente"
+		UnderfinedVar -> error $ "função inexistente: " ++ show expr
 
 storeParams _ [] [] = return Nil		
 storeParams env ((Id argName):args) (param:params) = do
