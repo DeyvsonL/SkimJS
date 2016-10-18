@@ -11,7 +11,8 @@ data Value = Bool Bool
 	| Break
 	| UnderfinedVar
 	| Function Id [Id] [Statement]
-
+	| FunctReturn Value
+	| EmptyFunctReturn
 --
 -- Pretty Printer
 --
@@ -26,7 +27,8 @@ instance Show Value where
   show Break = "break"
   show UnderfinedVar = "undefinedVar"
   show (Function (Id name) _ _) = name ++ "()"
-  
+  show (FunctReturn _) = ""
+  show EmptyFunctReturn = ""
 -- This function could be replaced by (unwords.map show). The unwords
 -- function takes a list of String values and uses them to build a 
 -- single String where the words are separated by spaces.

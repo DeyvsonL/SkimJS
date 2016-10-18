@@ -42,7 +42,10 @@ evalExpr env (CallExpr expr params) = do
 			storeParams env args params
 			evalResult <- evalStmt env (BlockStmt stmts)
 			removeScope
-			return evalResult
+			case evalResult of
+				EmptyFunctReturn -> return Nil
+				FunctReturn x -> return x
+				_ -> return Nil
 		UnderfinedVar -> error $ "função inexistente"
 
 storeParams _ [] [] = return Nil		
@@ -65,6 +68,8 @@ evalStmt env (BlockStmt (stmt:stmts)) = do
 	a <- evalStmt env stmt
 	case a of
 		Break -> return Break
+		FunctReturn x -> return (FunctReturn x)
+		EmptyFunctReturn -> return EmptyFunctReturn
 		_ -> evalStmt env (BlockStmt stmts)
 --end BlockStmt
 
@@ -102,6 +107,8 @@ evalStmt env (WhileStmt expr stmt) = do
 		removeScope
 		case a of 
 			Break -> return Nil
+			FunctReturn x -> return (FunctReturn x)
+			EmptyFunctReturn -> return EmptyFunctReturn
 			_ -> evalStmt env (WhileStmt expr stmt)
 	else return Nil
 --end while
@@ -109,6 +116,14 @@ evalStmt env (WhileStmt expr stmt) = do
 evalStmt env (BreakStmt _) = return Break
 --function
 evalStmt env (FunctionStmt (Id name) args stmts) = createAutomaticGlobalVar name (Function (Id name) args stmts)
+
+evalStmt env (ReturnStmt exp) = 
+	case exp of
+		Nothing -> return EmptyFunctReturn
+		Just x -> do
+			y <- evalExpr env x
+			return (FunctReturn y)
+
 -- end function
 --for
 evalStmt env (ForStmt init condition increment stmt) = do
@@ -120,6 +135,12 @@ evalStmt env (ForStmt init condition increment stmt) = do
 		evalResult <- evalStmt env stmt
 		removeScope
 		case evalResult of
+			FunctReturn x -> do
+				removeScope
+				return (FunctReturn x)
+			EmptyFunctReturn -> do
+				removeScope
+				return EmptyFunctReturn
 			Break -> do
 				removeScope
 				return Nil
@@ -137,6 +158,8 @@ forAux env (ForStmt init condition increment stmt) = do
 		evalResult <- evalStmt env stmt
 		removeScope
 		case evalResult of
+			FunctReturn x -> return (FunctReturn x)
+			EmptyFunctReturn -> return EmptyFunctReturn
 			Break -> do
 				return Nil
 			_ -> do
